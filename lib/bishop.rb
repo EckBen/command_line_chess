@@ -8,7 +8,6 @@ class Bishop
     @current_position = position
     @possible_moves = generate_possible_moves(position)
     @color = color
-    @possible_moves = generate_possible_moves(position)
     @token = (color == :white) ? @@WHITE_PIECE : @@BLACK_PIECE
   end
 
@@ -40,5 +39,32 @@ class Bishop
     end
 
     move_set
+  end
+
+  def traversed(destination)
+    pos = @current_position.split('')
+    des = destination.split('')
+
+    if pos[0] > des[0]
+      column = (des[0].ord + 1..pos[0].ord - 1).to_a.reverse
+      
+      to_move_through = (des[0].ord + 1..pos[0].ord - 1).map.with_index(1) do |letter, index|
+        if pos[1] < des[1]
+          column[index - 1].chr + (pos[1].to_i + index).to_s
+        else
+          column[index - 1].chr + (pos[1].to_i - index).to_s
+        end
+      end
+    else
+      to_move_through = (pos[0].ord + 1..des[0].ord - 1).map.with_index(1) do |letter, index|
+        if pos[1] < des[1]
+          letter.chr + (pos[1].to_i + index).to_s
+        else
+          letter.chr + (pos[1].to_i - index).to_s
+        end
+      end
+    end
+    
+    to_move_through
   end
 end

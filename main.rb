@@ -9,6 +9,9 @@ board.set_board
 board.show_board
 
 while true
+  # Disposable
+  p board.occupied_spaces
+  
   move = board.get_move
   piece = board.grab_piece(move[0])
   

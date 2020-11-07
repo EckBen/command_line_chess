@@ -8,7 +8,6 @@ class King
     @current_position = position
     @possible_moves = generate_possible_moves(position)
     @color = color
-    @possible_moves = generate_possible_moves(position)
     @token = (color == :white) ? @@WHITE_PIECE : @@BLACK_PIECE
   end
 

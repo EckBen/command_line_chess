@@ -6,18 +6,21 @@ require './lib/queen.rb'
 require './lib/rook.rb'
 
 class Board
-  attr_reader :active_pieces
+  attr_reader :active_pieces, :occupied_spaces
   
   def initialize
     @player = "White"
     @starting_positions = {
-      :bishops => {:white => ["c1","f1"], :black => ["c8","f8"]},
+      :bishops => {:white => ["f6"], :black => []},
+      :knights => {:white => ["b2","b4"], :black => ["d2"]},
+      # :bishops => {:white => ["c1","f1"], :black => ["c8","f8"]},
       # :kings => {:white => ["e1"], :black => ["e8"]},
-      :knights => {:white => ["b1","g1"], :black => ["b8","g8"]},
+      # :knights => {:white => ["b1","g1"], :black => ["b8","g8"]},
       # :pawns => {:white => ["a2","b2","c2","d2","e2","f2","g2","h2"], :black => ["a7","b7","c7","d7","e7","f7","g7","h7"]},
       # :queens => {:white => ["d1"], :black => ["d8"]},
       # :rooks => {:white => ["a1","h1"], :black => ["a8","h8"]}
     }
+    @occupied_spaces = []
     @board = self.create_new_board
     @active_pieces = {
       :white => {
@@ -141,13 +144,25 @@ class Board
     to_move
   end
 
-  # Update this method to help with knight vs other pieces and if pieces are in the way of possible moves
   def check_move_legality(piece,destination)
     if piece.possible_moves.include? destination
       space_occupier = grab_piece(destination)
       
       if space_occupier == "" || space_occupier.color != @player.downcase.to_sym
-        return true
+        
+        if piece.is_a? (Knight)
+          return true
+        else
+          moves_through = piece.traversed(destination)
+          p moves_through
+
+          moves_through.each do |space|
+            p space
+            return false if @occupied_spaces.include? space
+          end
+          
+          return true
+        end
       end
     end
 
@@ -163,8 +178,13 @@ class Board
 
   def set_piece(token, destination, position = nil)
     unless position == nil
+      occupied_spaces.delete(position)
       position = position.split('')
       @board[position[0]][position[1].to_i - 1] = "   "
+    end
+
+    unless occupied_spaces.include? destination
+      occupied_spaces << destination
     end
 
     destination = destination.split('')
