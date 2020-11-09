@@ -2,9 +2,10 @@ class Rook
   @@WHITE_PIECE = "\u265C"
   @@BLACK_PIECE = "\u2656"
 
-  attr_accessor :current_position, :possible_moves, :token, :color
+  attr_accessor :current_position, :possible_moves, :token, :color, :has_not_moved
   
   def initialize(color, position)
+    @has_not_moved = true
     @current_position = position
     @possible_moves = generate_possible_moves(position)
     @color = color
