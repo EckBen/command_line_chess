@@ -6,11 +6,16 @@ require './lib/queen.rb'
 require './lib/rook.rb'
 
 class Board
-  attr_reader :active_pieces, :occupied_spaces, :player
+  attr_reader :active_pieces, :occupied_spaces, :player, :in_check, :enemy
+  attr_accessor :check_breakers
   
   def initialize
+    @pressure_checker = false
+    @check_breakers = []
+    @in_check = false
     @en_passantable = ['',0]
-    @player = "White"
+    @player = :white
+    @enemy = :black
     @starting_positions = {
       :bishops => {:white => ["c1","f1"], :black => ["c8","f8"]},
       :kings => {:white => ["e1"], :black => ["e8"]},
@@ -139,7 +144,7 @@ class Board
   end
 
   def get_move
-    print "#{@player} player, please make your move: "
+    print "#{@player.to_s.capitalize} player, please make your move: "
     
     while true do
       full_input = gets.chomp.split(' ')
@@ -168,7 +173,6 @@ class Board
         end
       end
     end
-
     
     to_move
   end
@@ -190,36 +194,41 @@ class Board
         cur_row = piece.current_position.split('')[1].to_i
 
         if (cur_row - des_row).abs() > 1
-          traversed_space = des_col + (des_row + 1).to_s
+          if piece.color == :black
+            traversed_space = des_col + (des_row + 1).to_s
+          else
+            traversed_space = des_col + (des_row - 1).to_s
+          end
           
-          unless (@occupied_spaces.include? traversed_space) || (occupied_spaces.include? destination)
+          if !(@occupied_spaces.include? traversed_space) && !(@occupied_spaces.include? destination)
             @en_passantable = [piece,0]
             return true
           end
         elsif (cur_row - des_row).abs() == 1 && cur_col == des_col
-          unless (occupied_spaces.include? destination)
+          unless (@occupied_spaces.include? destination)
             return true
           end
         else
-          if space_occupier == ""
+          if space_occupier == "" && @pressure_checker == false
             if legal_en_passant(piece,des_col,des_row)
               taken_piece = @en_passantable[0].current_position.split('')
               @occupied_spaces.delete(taken_piece.join)
               @board[taken_piece[0]][taken_piece[1].to_i - 1] = "   "
-              @en_passantable[0].current_position = ''
+              delete_captured(@en_passantable[0])
               @en_passantable = ['',0]
               
               return true
             end
+          elsif @pressure_checker == true
+            return true
           else
-            if space_occupier.color != @player.downcase.to_sym
+            if space_occupier.color != @player
               return true
             end
           end
         end
 
-      elsif space_occupier == "" || space_occupier.color != @player.downcase.to_sym
-        
+      elsif space_occupier == "" || space_occupier.color != piece.color
         if (piece.is_a? (Knight))
           return true
         elsif (piece.is_a? (Queen)) || (piece.is_a? (Bishop)) || (piece.is_a? (Rook))
@@ -260,15 +269,11 @@ class Board
   end
 
   def pressure_on_space(destination)
-    temp_piece = Knight.new(@player.downcase.to_sym,destination)
-
-    self.change_player
-    opposing_player = @player.downcase.to_sym
-    self.change_player
-
-    @active_pieces[opposing_player].each do |piece_type, piece_array|
+    @pressure_checker = true
+    @active_pieces[@enemy].each do |piece_type, piece_array|
       if piece_type == :kings
         if (piece_array[0].possible_moves.include? destination)
+          @pressure_checker = false
           return true
         else
           next
@@ -276,15 +281,14 @@ class Board
       end
       
       piece_array.each do |opposing_piece|
-        if opposing_piece.current_position == ''
-          next
-        elsif check_move_legality(opposing_piece,destination)
-          temp_piece.current_position = ''
-          return true
+        if check_move_legality(opposing_piece,destination)
+          @pressure_checker = false
+          return true      
         end
       end
     end
 
+    @pressure_checker = false
     return false
   end
 
@@ -343,17 +347,17 @@ class Board
       
       case choice
       when "1"
-        @active_pieces[@player.downcase.to_sym][:queens] << Queen.new(@player.downcase.to_sym,coordinates)
-        set_piece(@active_pieces[@player.downcase.to_sym][:queens][-1].token,coordinates)
+        @active_pieces[@player][:queens] << Queen.new(@player,coordinates)
+        set_piece(@active_pieces[@player][:queens][-1].token,coordinates)
       when "2"
-        @active_pieces[@player.downcase.to_sym][:rooks] << Rook.new(@player.downcase.to_sym,coordinates)
-        set_piece(@active_pieces[@player.downcase.to_sym][:rooks][-1].token,coordinates)
+        @active_pieces[@player][:rooks] << Rook.new(@player,coordinates)
+        set_piece(@active_pieces[@player][:rooks][-1].token,coordinates)
       when "3"
-        @active_pieces[@player.downcase.to_sym][:bishops] << Bishop.new(@player.downcase.to_sym,coordinates)
-        set_piece(@active_pieces[@player.downcase.to_sym][:bishops][-1].token,coordinates)
+        @active_pieces[@player][:bishops] << Bishop.new(@player,coordinates)
+        set_piece(@active_pieces[@player][:bishops][-1].token,coordinates)
       when "4"
-        @active_pieces[@player.downcase.to_sym][:knights] << Knight.new(@player.downcase.to_sym,coordinates)
-        set_piece(@active_pieces[@player.downcase.to_sym][:knights][-1].token,coordinates)
+        @active_pieces[@player][:knights] << Knight.new(@player,coordinates)
+        set_piece(@active_pieces[@player][:knights][-1].token,coordinates)
       else
         puts "Error, selection not valid. Please try again."
         choice = ''
@@ -362,41 +366,75 @@ class Board
   end
 
   def change_player
-    @player = (@player == "White") ? "Black" : "White"
+    temp = @player
+    @player = @enemy
+    @enemy = temp
   end
 
-
-
-
-
-
-
-
-
-  def check_for_king
-    # Check if king is in new move_set
-    #if it is and the king has valid moves or its friendly pieces
-    #     can block the path or take the piece applying pressure
-    #   then return check
-    # else check mate
-    #on the reverse of this
-    # if king cant move and no other piece can aid, return check mate
-    # else return check
+  def delete_captured(piece)
+    piece_type = piece.class.to_s.downcase + 's'
+    @active_pieces[@enemy][piece_type.to_sym].delete piece
   end
 
-  
+  def check_for_check(piece)
+    enemy_king = @active_pieces[@enemy][:kings][0]
+
+    if piece.possible_moves.include? enemy_king.current_position
+      @in_check = true
+      return true if check_move_legality(piece,enemy_king.current_position)
+    end
+
+    @in_check = false
+    return false
+  end
+
+  def check_for_mate(piece)
+    enemy_king = @active_pieces[@enemy][:kings][0]
+
+    self.change_player
+    enemy_king.possible_moves.each do |space|
+      
+      if check_move_legality(enemy_king,space)
+        @check_breakers << [enemy_king,space]
+      end
+
+    end
+    self.change_player
+
+    @active_pieces[@enemy].each do |piece_type,piece_array|
+      next if piece_type == :kings
+
+      piece_array.each do |friendly_piece|
+        if friendly_piece.possible_moves.include? piece.current_position
+          if check_move_legality(friendly_piece,piece.current_position)
+            @check_breakers << [friendly_piece,piece.current_position]
+          end
+        elsif (piece.is_a? (Queen)) || (piece.is_a? (Bishop)) || (piece.is_a? (Rook))
+          traversed_spaces = piece.traversed(enemy_king.current_position)
+          next if traversed_spaces == []
+
+          traversed_spaces.each do |space|
+            if friendly_piece.possible_moves.include? space
+              
+              if check_move_legality(friendly_piece,space)
+                @check_breakers << [friendly_piece,space]
+              end
+            end
+          end
+        end
+      end
+    end
+
+    return (@check_breakers == []) ? true : false
+  end
+
+  def sacrificing_king(piece)
+    @occupied_spaces.delete piece.current_position
+    
+    king_in_danger = pressure_on_space(@active_pieces[piece.color][:kings][0].current_position)
+    
+    @occupied_spaces << piece.current_position
+    
+    return king_in_danger
+  end
 end
-
-
-
-
-
-
-# all_piece_types = [:bishops,:kings,:knights,:pawns,:queens,:rooks]
-# all_colors = [:white,:black]
-
-# all_colors.each do |color|
-#   all_piece_types.each do |unit|
-#     board.active_pieces[color][unit].each {|piece| p piece}
-#   end
-# end
